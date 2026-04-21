@@ -1,0 +1,21 @@
+{
+  "name": "memory-service",
+  "version": "0.1.0",
+  "description": "跨端角色持久记忆服务（独立 Node.js 进程，暴露 REST API；客户端包括 SillyTavern 扩展、微信、小手机等）",
+  "private": true,
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.9.0",
+    "express": "^5.2.1",
+    "fuse.js": "^7.3.0",
+    "gray-matter": "^4.0.3"
+  }
+}
