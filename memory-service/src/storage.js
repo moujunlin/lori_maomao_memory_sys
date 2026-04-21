@@ -49,15 +49,19 @@ export function safePath(parent, child) {
 // ========== 目录/文件名约定 ==========
 
 // 桶类型 → 存储子目录名（从 config.paths.subdirs 读取，permanent 固定）
-// type 取值：permanent | dynamic | archive | feel
+// type 取值：permanent | dynamic | archived | feel
+// 未知 type 直接 throw，避免静默路由到 dynamic 造成数据错位
 export function typeDirFor(baseDir, type, subdirs) {
   const map = {
     permanent: 'permanent',
     dynamic: subdirs.dynamic,
-    archive: subdirs.archived,
+    archived: subdirs.archived,
     feel: subdirs.feel,
   };
-  const dirName = map[type] || subdirs.dynamic;
+  const dirName = map[type];
+  if (!dirName) {
+    throw new Error(`[storage] 未知 bucket type: ${type}（允许值: permanent | dynamic | archived | feel）`);
+  }
   return path.join(baseDir, dirName);
 }
 
@@ -101,16 +105,26 @@ export async function readBucketFile(filePath) {
   }
 }
 
-// 原子写入：先写 .tmp 再 rename，避免进程中断导致半截文件
-// Windows 注意：rename 覆盖被占用文件（如 Obsidian 正在读）会抛 EPERM，先 unlink 更稳
+// 原子写入：tmp → rename 覆盖；原文件始终保留到新文件确认落盘，避免中途失败丢数据
+// tmp 后缀用 randomUUID，防止同进程并发写同桶时 tmp 互相覆盖
+// Windows 注意：rename 覆盖被占用文件会抛 EPERM/EBUSY，此时用 copyFile 兜底（非原子但不会丢原文件）
 export async function writeBucketFile(filePath, metadata, content) {
   await fs.mkdir(path.dirname(filePath), { recursive: true });
   const serialized = matter.stringify(content || '', metadata || {});
-  const tmp = `${filePath}.${process.pid}.tmp`;
+  const tmp = `${filePath}.${randomUUID()}.tmp`;
   try {
     await fs.writeFile(tmp, serialized, 'utf-8');
-    await fs.unlink(filePath).catch(e => { if (e.code !== 'ENOENT') throw e; });
-    await fs.rename(tmp, filePath);
+    try {
+      await fs.rename(tmp, filePath);
+    } catch (e) {
+      // Windows 下目标被占用或 rename 不允许覆盖时的兜底路径
+      if (e.code === 'EPERM' || e.code === 'EBUSY' || e.code === 'EEXIST' || e.code === 'EACCES') {
+        await fs.copyFile(tmp, filePath);
+        await fs.unlink(tmp).catch(() => {});
+      } else {
+        throw e;
+      }
+    }
   } catch (e) {
     await fs.unlink(tmp).catch(() => {});
     throw e;

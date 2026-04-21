@@ -145,6 +145,15 @@ function applyRealtimeFallback(cfg) {
 }
 
 // ========== 路径解析（相对路径 → 绝对路径，供下游模块直接使用） ==========
+// 绝对路径或 .. 逃逸到 rootDir 外一律拒绝，启动阶段 fail fast，避免存储操作写到服务目录外
+function assertInsideRoot(absRoot, absChild, fieldName) {
+  if (absChild !== absRoot && !absChild.startsWith(absRoot + path.sep)) {
+    throw new Error(
+      `[config] ${fieldName} 解析后 (${absChild}) 不在 rootDir (${absRoot}) 内，拒绝启动`
+    );
+  }
+}
+
 function resolvePaths(cfg, rootDir) {
   const absRoot = path.resolve(rootDir);
   const p = cfg.paths;
@@ -152,6 +161,8 @@ function resolvePaths(cfg, rootDir) {
   p.memoriesDirAbs = path.resolve(absRoot, p.memoriesDir);
   p.cacheDirAbs = path.resolve(absRoot, p.cacheDir);
   p.cacheDbPathAbs = path.join(p.cacheDirAbs, p.cacheDbFile);
+  assertInsideRoot(absRoot, p.memoriesDirAbs, 'paths.memoriesDir');
+  assertInsideRoot(absRoot, p.cacheDirAbs, 'paths.cacheDir');
   return cfg;
 }
 
