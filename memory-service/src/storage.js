@@ -51,7 +51,12 @@ export function safePath(parent, child) {
 // 桶类型 → 存储子目录名（从 config.paths.subdirs 读取，permanent 固定）
 // type 取值：permanent | dynamic | archived | feel
 // 未知 type 直接 throw，避免静默路由到 dynamic 造成数据错位
+// 兼容：老版本/跨版本数据里可能存 'archive'，自动规整为 'archived' 并 warn
 export function typeDirFor(baseDir, type, subdirs) {
+  if (type === 'archive') {
+    console.warn(`[storage] bucket type 'archive' 已弃用，自动规整为 'archived'；请升级调用方`);
+    type = 'archived';
+  }
   const map = {
     permanent: 'permanent',
     dynamic: subdirs.dynamic,
@@ -108,6 +113,8 @@ export async function readBucketFile(filePath) {
 // 原子写入：tmp → rename 覆盖；原文件始终保留到新文件确认落盘，避免中途失败丢数据
 // tmp 后缀用 randomUUID，防止同进程并发写同桶时 tmp 互相覆盖
 // Windows 注意：rename 覆盖被占用文件会抛 EPERM/EBUSY，此时用 copyFile 兜底（非原子但不会丢原文件）
+// 单进程假设：同一个 bucket 文件的并发写由上层（bucket_manager）串行化保证；
+//   storage 层不加 per-file mutex，v1 不考虑多进程/多 worker 写同桶的竞态
 export async function writeBucketFile(filePath, metadata, content) {
   await fs.mkdir(path.dirname(filePath), { recursive: true });
   const serialized = matter.stringify(content || '', metadata || {});
@@ -119,6 +126,7 @@ export async function writeBucketFile(filePath, metadata, content) {
     } catch (e) {
       // Windows 下目标被占用或 rename 不允许覆盖时的兜底路径
       if (e.code === 'EPERM' || e.code === 'EBUSY' || e.code === 'EEXIST' || e.code === 'EACCES') {
+        console.warn(`[storage] rename 失败 (${e.code})，走 copyFile 兜底（非原子）: ${filePath}`);
         await fs.copyFile(tmp, filePath);
         await fs.unlink(tmp).catch(() => {});
       } else {

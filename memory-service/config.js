@@ -145,11 +145,11 @@ function applyRealtimeFallback(cfg) {
 }
 
 // ========== 路径解析（相对路径 → 绝对路径，供下游模块直接使用） ==========
-// 绝对路径或 .. 逃逸到 rootDir 外一律拒绝，启动阶段 fail fast，避免存储操作写到服务目录外
-function assertInsideRoot(absRoot, absChild, fieldName) {
-  if (absChild !== absRoot && !absChild.startsWith(absRoot + path.sep)) {
+// 绝对路径或 .. 逃逸到指定父目录外一律拒绝，启动阶段 fail fast，避免存储操作写到服务目录外
+function assertInsideDir(absParent, absChild, fieldName) {
+  if (absChild !== absParent && !absChild.startsWith(absParent + path.sep)) {
     throw new Error(
-      `[config] ${fieldName} 解析后 (${absChild}) 不在 rootDir (${absRoot}) 内，拒绝启动`
+      `[config] ${fieldName} 解析后 (${absChild}) 不在允许目录 (${absParent}) 内，拒绝启动`
     );
   }
 }
@@ -160,9 +160,23 @@ function resolvePaths(cfg, rootDir) {
   p.rootDirAbs = absRoot;
   p.memoriesDirAbs = path.resolve(absRoot, p.memoriesDir);
   p.cacheDirAbs = path.resolve(absRoot, p.cacheDir);
-  p.cacheDbPathAbs = path.join(p.cacheDirAbs, p.cacheDbFile);
-  assertInsideRoot(absRoot, p.memoriesDirAbs, 'paths.memoriesDir');
-  assertInsideRoot(absRoot, p.cacheDirAbs, 'paths.cacheDir');
+  p.cacheDbPathAbs = path.resolve(p.cacheDirAbs, p.cacheDbFile);
+  assertInsideDir(absRoot, p.memoriesDirAbs, 'paths.memoriesDir');
+  assertInsideDir(absRoot, p.cacheDirAbs, 'paths.cacheDir');
+  // subdirs.* 以 memoriesDirAbs 为边界校验：防 config 手写错误（如 '../../outside'）
+  // 让 bucket 写到 memoriesDir 外。permanent 是硬编码不走 subdirs，无需校验
+  for (const [key, dirName] of Object.entries(p.subdirs || {})) {
+    const abs = path.resolve(p.memoriesDirAbs, dirName);
+    assertInsideDir(p.memoriesDirAbs, abs, `paths.subdirs.${key}`);
+  }
+  // cacheDbFile 以 cacheDirAbs 为边界校验：即使 cacheDir 合法，DB 文件名也可能用 .. 逃出去
+  assertInsideDir(p.cacheDirAbs, p.cacheDbPathAbs, 'paths.cacheDbFile');
+  // 防御 cacheDbFile 解析为空串/'.'/'subdir/..' 时落回 cacheDirAbs 本身；下游按文件打开会挂，早挂早诊断
+  if (p.cacheDbPathAbs === p.cacheDirAbs) {
+    throw new Error(
+      `[config] paths.cacheDbFile 解析后等于 cacheDirAbs (${p.cacheDirAbs})，必须是一个文件路径，拒绝启动`
+    );
+  }
   return cfg;
 }
 
