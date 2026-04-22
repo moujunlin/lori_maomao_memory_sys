@@ -62,7 +62,9 @@ export const DEFAULTS = {
     urgencyArousalThreshold: 0.7, // arousal > 0.7 且 unresolved → urgency
     urgencyBoost: 1.5,
     pinnedScore: 999,             // pinned/protected/permanent 固定分
-    feelScore: 50,                // feel 桶固定分，不衰减
+    feelLambda: 0.02,             // feel 专用衰减速率（慢于普通记忆的 0.05）
+    feelBaseScore: 30,            // feel 初始分基数
+    feelArousalMultiplier: 40,    // arousal 加权系数，范围约 30~70
     autoResolve: { importanceMax: 4, daysMin: 30 },  // imp≤4 且 >30 天自动结案
   },
 

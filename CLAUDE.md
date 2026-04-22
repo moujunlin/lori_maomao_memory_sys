@@ -102,9 +102,10 @@ Strong success criteria let you loop independently. Weak criteria (<q>"make it w
 - 短期/长期权重分离：≤3天 time70%+emotion30%，>3天 emotion70%+time30%
 - 新鲜度公式：freshness = 1.0 + 1.0 × e^(-t/36)，t 为小时，下限×1.0
 - 情感权重：emotion_weight = base + arousal × arousal_boost（默认 base=1.0, arousal_boost=0.8）
-- 权重池修正因子：unresolved×1.0, resolved×0.05, resolved+digested×0.02, urgent(arousal>0.7+unresolved)×1.5, pinned=999(不衰减不合并), feel=50(固定不衰减)
+- 权重池修正因子：unresolved×1.0, resolved×0.05, resolved+digested×0.02, urgent(arousal>0.7+unresolved)×1.5, pinned=999(不衰减不合并)
+- Feel 参数：独立 λ_feel（默认 0.02，慢于普通记忆的 0.05）、初始分 = base_feel + arousal × arousal_multiplier（默认 base_feel=30, arousal_multiplier=40，范围约 30-70）、可 resolve（resolve 后适用 resolved_factor 加速衰减）、review 阶段可合并主题高度重叠的 feel（合并后取较高分数 + 较新时间戳）
 - Review 机制（原项目称 dream）：对话开头自省消化旧记忆，能放下的 resolve，有沉淀的写 feel
-- Feel 机制：模型自己的感受/沉淀，固定分数 50，不衰减，不参与 dailyReview（每日回顾消化），不参与普通浮现，有 source_bucket 回链，用 domain=<q>"feel"</q> 单独检索
+- Feel 机制：模型自己的感受/沉淀，有 source_bucket 回链，用 domain=<q>"feel"</q> 单独检索，不参与普通浮现。产出时机有三个：对话中（realtime 检测到情绪沉淀时实时写入）、recall（重启对话回顾时产生新感受）、review（每日回顾系统性沉淀）。Feel 参与 dailyReview 的合并检查。
 - 记忆重构：检索时根据当前情绪状态微调 valence 展示值（±0.1）
 - 双通道检索：关键词模糊匹配 + 向量语义相似度并联，去重
 - 合并机制：相似度超过阈值（默认 75）的记忆桶自动合并
@@ -141,9 +142,10 @@ Strong success criteria let you loop independently. Weak criteria (<q>"make it w
 - 职责：
   - 浮现最近 N 条记忆，为当前对话提供事件上下文
   - 拉取近期 feel（domain=<q>"feel"</q>），接上情绪状态
-  - 浮现未 resolve 的情绪记忆（resolved=false），进行轻量情绪消化：判断经过一段时间后情绪是否自然消退，可以 soft-resolve
+  - 浮现未 resolve 的情绪记忆（resolved=false），带时间距离感判断情绪变化：可 soft-resolve 已消退的情绪，可写 feel 记录回顾时产生的新沉淀
   - 读取 notebook 内容注入上下文
   - 必须注入时间感知：告知模型<q>"距上次对话过去了 X 小时/天"</q>，让模型带时间距离感来判断情绪变化
+- 可做：soft-resolve（经过时间距离判断情绪已自然消退）、写 feel（回顾产生新的情感沉淀）
 - 不做：桶合并、归档、notebook 清理、profile suggestion
 - 模型：review 通道（需要情绪理解能力，realtime 小模型不够）
 - 产出：浮现的记忆列表 + notebook 内容 + 时间间隔信息，注入对话上下文
@@ -155,7 +157,7 @@ Strong success criteria let you loop independently. Weak criteria (<q>"make it w
 - 职责：
   - 读取当天所有记忆，整合消化
   - 系统性 resolve：判断哪些情绪记忆可以正式结案
-  - 写 feel：产出角色自身的情感沉淀
+  - 写 feel：产出角色自身的情感沉淀；检查已有 feel，合并主题高度重叠的条目
   - 发现跨记忆 connection / crystal hint
   - 桶合并：相似度超阈值的记忆桶合并
   - Notebook 清理：检查所有条目状态流转（pending→todo、done→删除、ongoing 适用性）
