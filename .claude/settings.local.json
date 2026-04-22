@@ -11,7 +11,14 @@
       "Bash(python -c \"import sys,json;d=json.load\\(sys.stdin\\);print\\('gray-matter', d.get\\('version'\\), 'deprecated:', d.get\\('deprecated','no'\\)\\)\")",
       "Bash(curl -s \"https://registry.npmjs.org/openai/latest\")",
       "Bash(python -c \"import sys,json;d=json.load\\(sys.stdin\\);print\\('openai', d.get\\('version'\\), 'deprecated:', d.get\\('deprecated','no'\\)\\)\")",
-      "Bash(node --check \"D:/lori_maomao_memorydraft_v1/memory-service/src/storage.js\")"
+      "Bash(node --check \"D:/lori_maomao_memorydraft_v1/memory-service/src/storage.js\")",
+      "Bash(node --check src/storage.js)",
+      "Bash(node --check config.js)",
+      "Bash(git add memory-service/*)",
+      "Bash(git add clients/*)",
+      "Bash(git add CLAUDE.md)",
+      "Bash(git add .claude/settings.local.json)",
+      "Bash(git commit -m *)"
     ]
   }
 }

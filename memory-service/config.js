@@ -19,7 +19,7 @@ export const DEFAULTS = {
   // --- 存储路径（相对 memory-service 根目录，运行时会解析为绝对路径） ---
   paths: {
     memoriesDir: 'memories',
-    subdirs: { dynamic: 'dynamic', archived: 'archived', feel: 'feel' },
+    subdirs: { dynamic: 'dynamic', archived: 'archived', feel: 'feel', notebook: 'notebook' },
     cacheDir: 'cache',
     cacheDbFile: 'dehydration.db',
   },
@@ -91,6 +91,14 @@ export const DEFAULTS = {
       probability: 0.6,
       requireApproval: true,
     },
+  },
+
+  // --- Notebook（置顶备忘，每次对话启动注入，不走检索不走衰减） ---
+  notebook: {
+    filename: 'notebook.md',          // 相对 subdirs.notebook 目录
+    maxItems: 50,                     // 超出时 review 阶段优先清理 done，其次合并 ongoing
+    retainDoneForReviews: 1,          // done 条目保留几个 review 周期后删除
+    dailyResetHour: 5,                // 每日几点重置 ongoing 子项 checkbox（0-23），不调用模型
   },
 
   reconstruction: { valenceDrift: 0.1 },  // 检索时 valence 展示值微调幅度

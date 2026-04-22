@@ -110,17 +110,17 @@ export async function readBucketFile(filePath) {
   }
 }
 
-// 原子写入：tmp → rename 覆盖；原文件始终保留到新文件确认落盘，避免中途失败丢数据
-// tmp 后缀用 randomUUID，防止同进程并发写同桶时 tmp 互相覆盖
+// 原子文本写入：tmp → rename 覆盖；原文件始终保留到新文件确认落盘，避免中途失败丢数据
+// tmp 后缀用 randomUUID，防止同进程并发写同文件时 tmp 互相覆盖
 // Windows 注意：rename 覆盖被占用文件会抛 EPERM/EBUSY，此时用 copyFile 兜底（非原子但不会丢原文件）
-// 单进程假设：同一个 bucket 文件的并发写由上层（bucket_manager）串行化保证；
-//   storage 层不加 per-file mutex，v1 不考虑多进程/多 worker 写同桶的竞态
-export async function writeBucketFile(filePath, metadata, content) {
+// 单进程假设：同一文件的并发写由上层（bucket_manager / 未来 notebook_manager）串行化保证；
+//   storage 层不加 per-file mutex，v1 不考虑多进程/多 worker 写同文件的竞态
+// 非导出：仅供 storage.js 内部复用（bucket 写入与 notebook 写入共用一套原子语义）
+async function writeTextAtomic(filePath, text) {
   await fs.mkdir(path.dirname(filePath), { recursive: true });
-  const serialized = matter.stringify(content || '', metadata || {});
   const tmp = `${filePath}.${randomUUID()}.tmp`;
   try {
-    await fs.writeFile(tmp, serialized, 'utf-8');
+    await fs.writeFile(tmp, text, 'utf-8');
     try {
       await fs.rename(tmp, filePath);
     } catch (e) {
@@ -137,6 +137,12 @@ export async function writeBucketFile(filePath, metadata, content) {
     await fs.unlink(tmp).catch(() => {});
     throw e;
   }
+}
+
+// 原子写入 bucket：序列化 frontmatter 后调 writeTextAtomic
+export async function writeBucketFile(filePath, metadata, content) {
+  const serialized = matter.stringify(content || '', metadata || {});
+  await writeTextAtomic(filePath, serialized);
 }
 
 // 删除文件；不存在时返回 false，不抛错
@@ -156,6 +162,34 @@ export async function moveBucketFile(srcPath, destPath) {
   await fs.mkdir(path.dirname(destPath), { recursive: true });
   await fs.rename(srcPath, destPath);
   return destPath;
+}
+
+// ========== Notebook 置顶备忘 ==========
+// 与 bucket 不同：notebook.md 不含 YAML frontmatter，以 Obsidian/用户直接可读可改为目标
+// 结构化解析（[ongoing]/[todo]/[done]、子项 checkbox、daily reset）由上层业务模块负责
+// storage 层只管路径拼接 + 原始文本 I/O
+
+// 拼 notebook.md 绝对路径（含 safePath 越界校验）
+// subdirs.notebook 在 config 启动时已校验过；filename 是用户可改项，这里再拦一层 ../ 逃逸
+export function notebookFilePath(baseDir, subdirs, filename) {
+  const dir = path.join(baseDir, subdirs.notebook);
+  return safePath(dir, filename);
+}
+
+// 读 notebook 原始文本；文件不存在返回 null（由上层决定是否初始化），其他读取错误抛出
+export async function readNotebookFile(filePath) {
+  try {
+    return await fs.readFile(filePath, 'utf-8');
+  } catch (e) {
+    if (e.code === 'ENOENT') return null;
+    throw e;
+  }
+}
+
+// 原子写入 notebook；父目录不存在由 writeTextAtomic 负责 mkdir
+// content 传 null/undefined 时按空字符串写入
+export async function writeNotebookFile(filePath, content) {
+  await writeTextAtomic(filePath, content ?? '');
 }
 
 // ========== 扫描/查找 ==========
