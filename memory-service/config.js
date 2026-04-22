@@ -70,27 +70,40 @@ export const DEFAULTS = {
   matching: { fuzzyThreshold: 50, maxResults: 5 },
   scoring: { topic: 4.0, emotion: 2.0, time: 1.5, importance: 1.0, content: 1.0 },
 
-  // --- Dream ---
-  // review  ：对话启动时的回顾消化（当前 dream() 实际行为——读最近N条 + connection/crystal hint）
-  // trueDream：真正的自由联想做梦（v1 关闭，仅预留结构；未来在空闲/夜间时段异步触发）
-  dream: {
-    review: {
-      recentLimit: 10,
-      connectionSimThreshold: 0.5,
-      crystalSimThreshold: 0.7,
-      crystalMinFeels: 3,
-      crystalMinSimilarPeers: 2,
-      contentPreviewChars: 500,
-    },
-    trueDream: {
-      enabled: false,
-      seedCount: { min: 1, max: 5 },
-      recallK: 12,
-      maxRangeDays: 180,
-      timeWindow: { startHour: 2, endHour: 6 },
-      probability: 0.6,
-      requireApproval: true,
-    },
+  // --- Recall（对话启动回顾，轻量） ---
+  // 对话流前置步骤，不是独立定时任务；仅在与上次对话间隔过长时触发
+  // 职责：浮现近期记忆 / 近期 feel / 未 resolve 情绪，读 notebook，注入时间感知
+  // 不做：桶合并、归档、notebook 清理、profile suggestion（这些归 review）
+  recall: {
+    gapThresholdMinutes: 60,       // 对话间隔超过多久触发 recall
+    recentLimit: 10,               // 浮现最近 N 条记忆
+    includeUnresolved: true,       // 拉未 resolve 的情绪记忆
+    includeRecentFeels: true,      // 拉近期 feel
+    feelLimit: 5,                  // 最多拉几条 feel
+  },
+
+  // --- DailyReview（每日回顾，重量级） ---
+  // daily 定时任务 + 手动 trigger（/review endpoint），系统性回顾整合
+  // 命名 dailyReview 而非 review 是为了和 llm.review 通道彻底解耦
+  dailyReview: {
+    connectionSimThreshold: 0.5,
+    crystalSimThreshold: 0.7,
+    crystalMinFeels: 3,
+    crystalMinSimilarPeers: 2,
+    contentPreviewChars: 500,
+    scheduledOffsetMinutes: 5,     // 在 notebook.dailyResetHour 之后几分钟执行（默认 05:05）；改 dailyResetHour 时自动跟随
+  },
+
+  // --- TrueDream（v1 关闭，预留） ---
+  // 独立于对话流的自由联想，在空闲/夜间时段异步触发
+  trueDream: {
+    enabled: false,
+    seedCount: { min: 1, max: 5 },
+    recallK: 12,
+    maxRangeDays: 180,
+    timeWindow: { startHour: 2, endHour: 6 },
+    probability: 0.6,
+    requireApproval: true,
   },
 
   // --- Notebook（置顶备忘，每次对话启动注入，不走检索不走衰减） ---
