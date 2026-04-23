@@ -18,7 +18,8 @@
       "Bash(git add clients/*)",
       "Bash(git add CLAUDE.md)",
       "Bash(git add .claude/settings.local.json)",
-      "Bash(git commit -m *)"
+      "Bash(git commit -m *)",
+      "Skill(codex:setup)"
     ]
   }
 }

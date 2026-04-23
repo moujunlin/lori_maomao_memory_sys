@@ -7,6 +7,7 @@
 import path from 'node:path';
 import * as storage from './storage.js';
 import * as indexer from './indexer.js';
+import * as cache from './cache.js';
 
 const locks = new Map();
 let _cfg = null;
@@ -88,6 +89,7 @@ export async function update(id, patchMetadata, patchContent) {
     await storage.writeBucketFile(absPath, mergedMeta, mergedContent);
 
     indexer.updateEntry(id, entryFromMeta(id, absPath, mergedMeta, { domain: entry.domain }));
+    cache.removeBucket(id);
     return indexer.get(id);
   });
 }
@@ -107,6 +109,7 @@ export async function remove(id) {
     const absPath = path.join(_cfg.paths.memoriesDirAbs, entry.filePath);
     await storage.deleteBucketFile(absPath);
     indexer.removeEntry(id);
+    cache.removeBucket(id);
     return true;
   });
 }
@@ -133,6 +136,8 @@ export async function merge(targetId, mergedMetadata, mergedContent, sourceId) {
       { op: 'patch', id: targetId, partial: entryFromMeta(targetId, targetAbs, meta, { domain: target.domain }) },
       { op: 'remove', id: sourceId },
     ]);
+    cache.removeBucket(targetId);
+    cache.removeBucket(sourceId);
     return indexer.get(targetId);
   }));
 }
@@ -160,6 +165,7 @@ export async function archive(id) {
 
     const rel = path.relative(_cfg.paths.memoriesDirAbs, destAbs);
     indexer.updateEntry(id, { domain: 'archived', filePath: rel, updatedAt: now() });
+    cache.removeBucket(id);
     return indexer.get(id);
   });
 }

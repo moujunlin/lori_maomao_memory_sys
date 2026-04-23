@@ -116,6 +116,10 @@ export const DEFAULTS = {
     dailyResetHour: 5,                // 每日几点重置 ongoing 子项 checkbox（0-23），不调用模型
   },
 
+  cache: {
+    hotBucketCapacity: 50,            // LRU 热桶缓存：最多保留 N 个解析后的桶
+  },
+
   reconstruction: { valenceDrift: 0.1 },  // 检索时 valence 展示值微调幅度
   embedding: { enabled: false, baseUrl: '', apiKey: '', model: 'gemini-embedding-001' },  // v1 关闭
   timeRipple: { windowHours: 48, maxRippled: 5, boost: 0.3 },  // 联想激活：相邻桶 activation_count 微提
