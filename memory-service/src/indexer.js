@@ -83,8 +83,10 @@ export async function buildIndex(config) {
   _fuse = null;
   const all = await storage.listMdFiles(_cfg.paths.memoriesDirAbs);
   const nb = path.join(_cfg.paths.memoriesDirAbs, _cfg.paths.subdirs.notebook, _cfg.notebook.filename);
+  const pnDir = _cfg.paths.partnerNotesDirAbs;
   for (const p of all) {
     if (path.resolve(p) === path.resolve(nb)) continue;
+    if (pnDir && p.startsWith(pnDir + path.sep)) continue;
     try {
       const e = await buildEntry(p);
       if (!e) continue;

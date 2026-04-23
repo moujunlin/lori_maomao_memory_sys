@@ -20,6 +20,7 @@ export const DEFAULTS = {
   paths: {
     memoriesDir: 'memories',
     subdirs: { dynamic: 'dynamic', archived: 'archived', feel: 'feel', notebook: 'notebook' },
+    partnerNotesDir: 'partner_notes',
     cacheDir: 'cache',
     cacheDbFile: 'dehydration.db',
   },
@@ -120,6 +121,9 @@ export const DEFAULTS = {
     hotBucketCapacity: 50,            // LRU 热桶缓存：最多保留 N 个解析后的桶
   },
 
+  // --- Partner Notes（用户便利贴，v1 无额外配置项，预留空对象） ---
+  partnerNotes: {},
+
   reconstruction: { valenceDrift: 0.1 },  // 检索时 valence 展示值微调幅度
   embedding: { enabled: false, baseUrl: '', apiKey: '', model: 'gemini-embedding-001' },  // v1 关闭
   timeRipple: { windowHours: 48, maxRippled: 5, boost: 0.3 },  // 联想激活：相邻桶 activation_count 微提
@@ -186,15 +190,53 @@ function resolvePaths(cfg, rootDir) {
   const p = cfg.paths;
   p.rootDirAbs = absRoot;
   p.memoriesDirAbs = path.resolve(absRoot, p.memoriesDir);
+  p.partnerNotesDirAbs = path.resolve(p.memoriesDirAbs, p.partnerNotesDir);
   p.cacheDirAbs = path.resolve(absRoot, p.cacheDir);
   p.cacheDbPathAbs = path.resolve(p.cacheDirAbs, p.cacheDbFile);
   assertInsideDir(absRoot, p.memoriesDirAbs, 'paths.memoriesDir');
+  assertInsideDir(p.memoriesDirAbs, p.partnerNotesDirAbs, 'paths.partnerNotesDir');
   assertInsideDir(absRoot, p.cacheDirAbs, 'paths.cacheDir');
   // subdirs.* 以 memoriesDirAbs 为边界校验：防 config 手写错误（如 '../../outside'）
   // 让 bucket 写到 memoriesDir 外。permanent 是硬编码不走 subdirs，无需校验
+  if (p.partnerNotesDirAbs === p.memoriesDirAbs) {
+    throw new Error(
+      `[config] paths.partnerNotesDir (${p.partnerNotesDir}) 不能为 memoriesDir 本身，拒绝启动`
+    );
+  }
   for (const [key, dirName] of Object.entries(p.subdirs || {})) {
     const abs = path.resolve(p.memoriesDirAbs, dirName);
     assertInsideDir(p.memoriesDirAbs, abs, `paths.subdirs.${key}`);
+    if (abs === p.partnerNotesDirAbs) {
+      throw new Error(
+        `[config] paths.partnerNotesDir (${p.partnerNotesDir}) 与 paths.subdirs.${key} (${dirName}) 重叠，拒绝启动`
+      );
+    }
+    const rel = path.relative(p.partnerNotesDirAbs, abs);
+    if (!rel.startsWith('..') && !path.isAbsolute(rel)) {
+      throw new Error(
+        `[config] paths.partnerNotesDir (${p.partnerNotesDir}) 包含 paths.subdirs.${key} (${dirName})，拒绝启动`
+      );
+    }
+    const rel2 = path.relative(abs, p.partnerNotesDirAbs);
+    if (!rel2.startsWith('..') && !path.isAbsolute(rel2)) {
+      throw new Error(
+        `[config] paths.partnerNotesDir (${p.partnerNotesDir}) 位于 paths.subdirs.${key} (${dirName}) 内，拒绝启动`
+      );
+    }
+  }
+  // permanent 是硬编码目录，不在 subdirs 循环中，单独校验重叠
+  const permanentAbs = path.resolve(p.memoriesDirAbs, 'permanent');
+  const relPerm = path.relative(p.partnerNotesDirAbs, permanentAbs);
+  if (!relPerm.startsWith('..') && !path.isAbsolute(relPerm)) {
+    throw new Error(
+      `[config] paths.partnerNotesDir (${p.partnerNotesDir}) 包含 permanent 目录，拒绝启动`
+    );
+  }
+  const relPerm2 = path.relative(permanentAbs, p.partnerNotesDirAbs);
+  if (!relPerm2.startsWith('..') && !path.isAbsolute(relPerm2)) {
+    throw new Error(
+      `[config] paths.partnerNotesDir (${p.partnerNotesDir}) 位于 permanent 目录内，拒绝启动`
+    );
   }
   // cacheDbFile 以 cacheDirAbs 为边界校验：即使 cacheDir 合法，DB 文件名也可能用 .. 逃出去
   assertInsideDir(p.cacheDirAbs, p.cacheDbPathAbs, 'paths.cacheDbFile');

@@ -242,6 +242,33 @@ Review 阶段可额外产出 user profile / char profile 的修改建议（profi
 - 实现位置：review 的 daily 流程
 - v1 不实现此功能，仅预留设计意图
 
+## Partner Notes 操作规范
+
+partner_notes 是用户写给 AI 的便利贴。内容由用户决定——可以是项目文档、纪念日、希望 AI 记住的任何事。它代表的是"用户认为重要的、希望每次对话都被看到的信息"。
+
+与 notebook 的区别：notebook 是 AI 自己的备忘本，AI 可以自由读写维护；partner_notes 是用户贴过来的，笔在用户手里。AI 可以读取并在对话中引用，可以建议"这条是否需要更新或删除"，但不可以自行修改或删除。所有写操作必须经用户在客户端确认。
+
+不参与衰减，不参与 review 合并。每次对话启动时与 notebook 一起注入。
+
+### 文件位置
+`memories/partner_notes/*.md`（多文件，每条一个独立 md）
+
+### 条目结构
+```yaml
+---
+id: "pn_xxxxxxxxxxxx"
+tag: "项目"          # 可选，用于归类
+created: 2026-04-23
+updated: 2026-04-23
+---
+正文内容
+```
+
+### 更新时机与分工
+- **用户（客户端）**：唯一有权写入的人。通过酒馆插件面板增删改 partner_notes。
+- **AI（对话中）**：只读。可引用内容，可提议更新，但不可调用写入接口。
+- **review / daily reset**：不处理 partner_notes。无状态流转、无衰减、无合并。
+
 ## 功能映射（原项目 MCP 工具 → 本项目模块）
 
 | 原项目工具 | 功能 | 本项目对应 |

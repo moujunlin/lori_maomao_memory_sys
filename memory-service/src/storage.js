@@ -234,3 +234,80 @@ export async function findBucketFileById(bucketId, searchDirs) {
 export async function ensureDir(dirPath) {
   await fs.mkdir(dirPath, { recursive: true });
 }
+
+// ========== Partner Notes 用户便利贴 ==========
+// 与 bucket 不同：扁平目录，无子目录层级，文件名即 id.md
+// 读解析 frontmatter + content；写覆盖更新（用户编辑自己的便利贴）
+
+export function partnerNoteFilePath(dirAbs, id) {
+  if (!id || typeof id !== 'string') throw new Error('[storage] partnerNote id 不能为空');
+  if (UNSAFE_FILENAME_RE.test(id)) throw new Error('[storage] partnerNote id 包含非法字符');
+  return safePath(dirAbs, `${id}.md`);
+}
+
+// 读取 partner_notes 目录下所有条目；目录不存在返回空数组
+// 扁平扫描：只读一层，不递归子目录；解析失败返回 corrupted 标记而不是静默跳过
+export async function listPartnerNotes(dirAbs) {
+  let entries;
+  try {
+    entries = await fs.readdir(dirAbs, { withFileTypes: true });
+  } catch (e) {
+    if (e.code === 'ENOENT') return [];
+    throw e;
+  }
+  const out = [];
+  for (const ent of entries) {
+    if (!ent.isFile() || !ent.name.endsWith('.md')) continue;
+    const fp = path.join(dirAbs, ent.name);
+    let raw;
+    try {
+      raw = await fs.readFile(fp, 'utf-8');
+    } catch (e) {
+      if (e.code === 'ENOENT') continue;
+      throw e;
+    }
+    const id = path.basename(ent.name, '.md');
+    try {
+      const { data, content } = matter(raw);
+      out.push({ id, meta: data || {}, content: content || '', corrupted: false });
+    } catch (e) {
+      console.warn(`[storage] partner note frontmatter 解析失败 ${fp}: ${e.message}`);
+      out.push({ id, meta: null, content: raw, corrupted: true });
+    }
+  }
+  return out;
+}
+
+// 读取单条；不存在返回 null，解析失败返回 corrupted 标记（meta 为 null，content 为原始文本）
+export async function readPartnerNote(dirAbs, id) {
+  const fp = partnerNoteFilePath(dirAbs, id);
+  let raw;
+  try {
+    raw = await fs.readFile(fp, 'utf-8');
+  } catch (e) {
+    if (e.code === 'ENOENT') return null;
+    throw e;
+  }
+  try {
+    const { data, content } = matter(raw);
+    return { id, meta: data || {}, content: content || '', corrupted: false };
+  } catch (e) {
+    console.warn(`[storage] partner note frontmatter 解析失败 ${fp}: ${e.message}`);
+    return { id, meta: null, content: raw, corrupted: true };
+  }
+}
+
+// 写入/覆盖单条；自动刷新 meta.updated 为当前日期，created 缺省时自动补
+export async function writePartnerNote(dirAbs, id, meta, content) {
+  const fp = partnerNoteFilePath(dirAbs, id);
+  const today = new Date().toISOString().slice(0, 10);
+  const mergedMeta = {
+    ...(meta || {}),
+    id,
+    updated: today,
+  };
+  if (!mergedMeta.created) {
+    mergedMeta.created = today;
+  }
+  await writeBucketFile(fp, mergedMeta, content);
+}
