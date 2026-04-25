@@ -23,7 +23,7 @@ async function withLock(id, fn) {
     return fn();
   })();
   locks.set(id, next);
-  next.finally(() => { if (locks.get(id) === next) locks.delete(id); });
+  next.finally(() => { if (locks.get(id) === next) locks.delete(id); }).catch(() => {});
   return next;
 }
 
@@ -84,7 +84,7 @@ export async function update(id, patchMetadata, patchContent) {
     const read = await storage.readBucketFile(absPath);
     if (!read) throw new Error(`[bucket_manager] update 读盘失败: ${absPath}`);
 
-    const mergedMeta = { ...read.metadata, ...patchMetadata, updatedAt: now() };
+    const mergedMeta = { ...read.metadata, ...patchMetadata, id, updatedAt: now() };
     const mergedContent = patchContent !== undefined ? patchContent : read.content;
     await storage.writeBucketFile(absPath, mergedMeta, mergedContent);
 
@@ -128,7 +128,7 @@ export async function merge(targetId, mergedMetadata, mergedContent, sourceId) {
     const targetAbs = path.join(_cfg.paths.memoriesDirAbs, target.filePath);
     const sourceAbs = path.join(_cfg.paths.memoriesDirAbs, source.filePath);
 
-    const meta = { ...mergedMetadata, updatedAt: now() };
+    const meta = { ...mergedMetadata, id: targetId, updatedAt: now() };
     await storage.writeBucketFile(targetAbs, meta, mergedContent);
     await storage.deleteBucketFile(sourceAbs);
 
@@ -154,7 +154,7 @@ export async function archive(id) {
     const read = await storage.readBucketFile(srcAbs);
     if (!read) throw new Error(`[bucket_manager] archive 读盘失败: ${srcAbs}`);
 
-    const meta = { ...read.metadata, updatedAt: now() };
+    const meta = { ...read.metadata, id, updatedAt: now() };
     const topics = Array.isArray(meta.tags) && meta.tags.length ? meta.tags : ['未分类'];
     const destAbs = storage.bucketFilePath(
       _cfg.paths.memoriesDirAbs, 'archived', topics, meta.name || '', id, _cfg.paths.subdirs

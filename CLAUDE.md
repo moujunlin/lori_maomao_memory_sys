@@ -342,6 +342,24 @@ lori_maomao_memorydraft_v1/                (monorepo)
 
 ## 工作流
 
+### 代码修改权限
+功能代码（memory-service/src/*.js）的新增和修改仅由 Claude Code（Kimi） 执行。
+Codex 职责限于：对抗性评审（通过 Claude Code plugin 执行）、测试代码编写（memory-service/test/*.js）。
+Claude Desktop（Cowork）职责限于：code review、设计评审、review 判读。
+Lori 职责限于：架构设计、指令编写与Anything 猫猫 Ask。
+任何角色越权修改功能代码时，立即回滚。
+
+### Pre-implementation Design Review
+新模块动手前 → Kimi 出设计文档（职责、接口签名、依赖、错误处理、开放问题）→ 多方评审（Lori 架构 + Codex 边界安全 + Claude Desktop 代码可行性）→ 收敛 → 实现
+
+适用范围：新模块、跨模块重构、接口变更。单文件内的 bugfix 和小改动不需要走这个流程。
+
+### Test-Driven Development（新模块适用）
+设计评审通过 → Codex 输出测试骨架（node:test + node:assert/strict）→ 首批覆盖核心路径 + 关键边界（一般 8-10 条）→ 确认全红 → Kimi 实现至全绿 → 补充剩余测试 → Pre-commit Review
+
+适用范围：新模块。已有模块的 bugfix 和小改动直接写，不强制 TDD。
+测试运行器：Node.js 原生 node:test，不引入 Jest/Vitest。
+
 ### Pre-commit Review
 写完 → Lori code review（架构 + 逻辑）→ /codex:adversarial-review（安全 + 边界）→ 通过 → commit
 
@@ -350,3 +368,4 @@ lori_maomao_memorydraft_v1/                (monorepo)
 - No new high from real misconfiguration scenarios → 必须修
 - High from 主动作恶/攻击者场景 → backlog，v1 threat model 不覆盖
 - Medium 及以下 → 记录 backlog，不 blocking
+- 已评估并明确决策的 finding 再次出现（含升级 severity）→ 不重复处理，backlog 备注决策理由

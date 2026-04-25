@@ -4,6 +4,7 @@
 // 索引不含 content 全文，全文按需从文件读
 // ============================================================
 
+import fs from 'node:fs/promises';
 import path from 'node:path';
 import Fuse from 'fuse.js';
 import * as storage from './storage.js';
@@ -36,8 +37,15 @@ function inferDomain(absFilePath) {
 }
 
 // ⚠ 命名规则须与 bucket_manager.create() 对齐：{name}_{id}.md 或 {id}.md
+// id 新格式带 bkt_ 前缀（如 bkt_a1b2c3d4e5f6），含下划线，不能再简单 split('_').pop()
 function extractId(basename) {
-  return basename.replace(/\.md$/, '').split('_').pop();
+  const name = basename.replace(/\.md$/, '');
+  const match = name.match(/bkt_[a-f0-9]{12}$/i);
+  if (!match) {
+    console.warn(`[indexer] 跳过非 bucket 文件: ${basename}`);
+    return null;
+  }
+  return match[0];
 }
 
 async function buildEntry(absFilePath) {
@@ -47,6 +55,12 @@ async function buildEntry(absFilePath) {
   if (!domain) return null;
   const m = read.metadata || {};
   const id = extractId(path.basename(absFilePath));
+  if (!id) return null;
+  // 准入门槛：frontmatter.id 必须存在且等于文件名推导的 ID
+  if (!m.id || m.id !== id) {
+    console.warn(`[indexer] 跳过 frontmatter 不匹配的文件: ${path.basename(absFilePath)}`);
+    return null;
+  }
   const rel = path.relative(_cfg.paths.memoriesDirAbs, absFilePath);
   return {
     id, filePath: rel, domain,
@@ -82,6 +96,7 @@ export async function buildIndex(config) {
   _index.clear();
   _fuse = null;
   const all = await storage.listMdFiles(_cfg.paths.memoriesDirAbs);
+  all.sort(); // 消除 readdir 非确定性，重复 ID 的 winner 固定为字典序最小路径
   const nb = path.join(_cfg.paths.memoriesDirAbs, _cfg.paths.subdirs.notebook, _cfg.notebook.filename);
   const pnDir = _cfg.paths.partnerNotesDirAbs;
   for (const p of all) {
@@ -91,7 +106,7 @@ export async function buildIndex(config) {
       const e = await buildEntry(p);
       if (!e) continue;
       if (_index.has(e.id)) {
-        console.warn(`[indexer] 重复 id ${e.id}: ${_index.get(e.id).filePath} vs ${e.filePath}，跳过后者`);
+        console.warn(`[indexer] [CONFLICT] 重复 id ${e.id}: ${_index.get(e.id).filePath} vs ${e.filePath}，跳过后者`);
         continue;
       }
       _index.set(e.id, e);
@@ -158,7 +173,17 @@ export async function refresh(id) {
   if (!e) return null;
   const abs = path.join(_cfg.paths.memoriesDirAbs, e.filePath);
   const fresh = await buildEntry(abs);
-  if (!fresh) { removeEntry(id); return null; }
+  if (!fresh) {
+    try {
+      await fs.access(abs);
+      // 文件还在，只是解析/校验失败，保留旧条目
+      console.warn(`[indexer] refresh 解析失败，保留旧条目: ${id}`);
+      return e;
+    } catch {
+      removeEntry(id);
+      return null;
+    }
+  }
   updateEntry(id, fresh);
   return fresh;
 }

@@ -11,7 +11,7 @@
 
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { randomUUID, randomBytes } from 'node:crypto';
 import matter from 'gray-matter';
 
 // feel 桶固定子目录名（语义上"情感沉淀物"，不随 domain 变化）
@@ -19,9 +19,8 @@ const FEEL_SUBDIR = '沉淀物';
 const DEFAULT_DOMAIN = '未分类';
 
 // ========== ID 生成 ==========
-// 12 位 hex，对齐参考项目 utils.py:generate_bucket_id（uuid.uuid4().hex[:12]）
 export function generateBucketId() {
-  return randomUUID().replace(/-/g, '').slice(0, 12);
+  return 'bkt_' + randomBytes(6).toString('hex');
 }
 
 // ========== 名称/路径安全 ==========

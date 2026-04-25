@@ -121,6 +121,11 @@ export const DEFAULTS = {
     hotBucketCapacity: 50,            // LRU 热桶缓存：最多保留 N 个解析后的桶
   },
 
+  // --- Dehydrator（对话脱水/记忆提取） ---
+  dehydrator: {
+    maxTurns: 50,                     // 单次提取最多处理轮次数；调用方负责截断，超限 fail fast
+  },
+
   // --- Partner Notes（用户便利贴，v1 无额外配置项，预留空对象） ---
   partnerNotes: {},
 
