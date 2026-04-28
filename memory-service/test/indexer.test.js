@@ -180,4 +180,55 @@ test('indexer skips non-bucket markdown files under memory directories', async (
   assert.ok(warns.some((msg) => msg.includes('meeting-notes.md')));
 });
 
-test.todo('indexer.findSimilar returns an empty array when no similar bucket is found');
+test('indexer.findSimilar filters by score, id, domain, type, and max results', async () => {
+  const root = await tempDir();
+  const cfg = await makeConfig(root);
+  const teaId = 'bkt_666666666666';
+  const feelId = 'bkt_777777777777';
+  const archivedId = 'bkt_888888888888';
+  const coffeeId = 'bkt_999999999999';
+
+  await writeBucketFile(
+    path.join(cfg.paths.memoriesDirAbs, cfg.paths.subdirs.dynamic, 'food', `memo_${teaId}.md`),
+    { id: teaId, type: 'event', summary: 'User likes jasmine tea', tags: ['tea', 'preference'] },
+    'content'
+  );
+  await writeBucketFile(
+    path.join(cfg.paths.memoriesDirAbs, cfg.paths.subdirs.feel, `memo_${feelId}.md`),
+    { id: feelId, type: 'feel', summary: 'Assistant feels calm about jasmine tea', tags: ['tea'] },
+    'content'
+  );
+  await writeBucketFile(
+    path.join(cfg.paths.memoriesDirAbs, cfg.paths.subdirs.archived, `memo_${archivedId}.md`),
+    { id: archivedId, type: 'event', summary: 'Archived note about jasmine tea', tags: ['tea'] },
+    'content'
+  );
+  await writeBucketFile(
+    path.join(cfg.paths.memoriesDirAbs, cfg.paths.subdirs.dynamic, 'food', `memo_${coffeeId}.md`),
+    { id: coffeeId, type: 'event', summary: 'User likes black coffee', tags: ['coffee'] },
+    'content'
+  );
+
+  await indexer.buildIndex(cfg);
+
+  assert.deepEqual(
+    indexer.findSimilar({ summary: 'unrelated bicycle repair', tags: ['garage'] }, { threshold: 75 }),
+    []
+  );
+
+  const dynamicEvents = indexer.findSimilar(
+    { summary: 'jasmine tea preference', tags: ['tea'] },
+    { threshold: 1, domain: 'dynamic', type: 'event', excludeId: coffeeId, maxResults: 1 }
+  );
+
+  assert.equal(dynamicEvents.length, 1);
+  assert.equal(dynamicEvents[0].entry.id, teaId);
+  assert.ok(dynamicEvents[0].score >= 1);
+
+  const feelMatches = indexer.findSimilar(
+    { summary: 'jasmine tea calm feeling', tags: ['tea'] },
+    { threshold: 1, domain: 'feel', type: 'feel' }
+  );
+
+  assert.deepEqual(feelMatches.map((m) => m.entry.id), [feelId]);
+});

@@ -166,6 +166,47 @@ export function pulse() {
   return { total: _index.size, byDomain, unresolved };
 }
 
+export function findSimilar(candidate, opts = {}) {
+  if (!_fuse) return [];
+
+  const threshold = opts.threshold ?? (_cfg.merge?.threshold ?? 75);
+  const excludeId = opts.excludeId;
+  const maxResults = opts.maxResults ?? 5;
+  const domainFilter = opts.domain;
+  const typeFilter = opts.type;
+
+  const resultsMap = new Map();
+
+  function consider(entry, score) {
+    if (excludeId && entry.id === excludeId) return;
+    if (score < threshold) return;
+    if (domainFilter && entry.domain !== domainFilter) return;
+    if (typeFilter && entry.type !== typeFilter) return;
+    const existing = resultsMap.get(entry.id);
+    if (!existing || existing.score < score) {
+      resultsMap.set(entry.id, { entry, score });
+    }
+  }
+
+  if (candidate.summary) {
+    for (const r of _fuse.search(candidate.summary)) {
+      consider(r.item, (1 - r.score) * 100);
+    }
+  }
+
+  if (Array.isArray(candidate.tags)) {
+    for (const tag of candidate.tags) {
+      for (const r of _fuse.search(tag)) {
+        consider(r.item, (1 - r.score) * 100);
+      }
+    }
+  }
+
+  return [...resultsMap.values()]
+    .sort((a, b) => b.score - a.score)
+    .slice(0, maxResults);
+}
+
 // ========== 刷新 ==========
 
 export async function refresh(id) {

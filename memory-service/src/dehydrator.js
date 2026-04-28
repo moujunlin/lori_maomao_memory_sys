@@ -76,7 +76,7 @@ function cleanJsonContent(content) {
   return s;
 }
 
-function validateAndNormalizeItem(item, turnCount) {
+export function validateAndNormalizeItem(item, turnCount) {
   if (!item || typeof item !== 'object') {
     console.warn('[dehydrator] 丢弃非对象项');
     return null;
